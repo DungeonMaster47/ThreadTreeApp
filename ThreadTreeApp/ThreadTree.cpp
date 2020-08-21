@@ -129,6 +129,15 @@ std::vector<StackFrame> ThreadTree::getStackTrace(HANDLE hProcess, HANDLE hThrea
 	context.ContextFlags = CONTEXT_FULL;
 	GetThreadContext(hThread, &context);
 
+#if _WIN64
+	STACKFRAME frame = {};
+	frame.AddrPC.Offset = context.Rip;
+	frame.AddrPC.Mode = AddrModeFlat;
+	frame.AddrFrame.Offset = context.Rbp;
+	frame.AddrFrame.Mode = AddrModeFlat;
+	frame.AddrStack.Offset = context.Rsp;
+	frame.AddrStack.Mode = AddrModeFlat;
+#else
 	STACKFRAME frame = {};
 	frame.AddrPC.Offset = context.Eip;
 	frame.AddrPC.Mode = AddrModeFlat;
@@ -136,21 +145,36 @@ std::vector<StackFrame> ThreadTree::getStackTrace(HANDLE hProcess, HANDLE hThrea
 	frame.AddrFrame.Mode = AddrModeFlat;
 	frame.AddrStack.Offset = context.Esp;
 	frame.AddrStack.Mode = AddrModeFlat;
+#endif
 
-	while (StackWalk(IMAGE_FILE_MACHINE_I386, hProcess, hThread, &frame, &context, NULL, SymFunctionTableAccess, SymGetModuleBase, NULL))
+#if _WIN64
+	DWORD machine = IMAGE_FILE_MACHINE_AMD64;
+#else
+	DWORD machine = IMAGE_FILE_MACHINE_I386;
+#endif
+
+	while (StackWalk(machine, hProcess, hThread, &frame, &context, NULL, SymFunctionTableAccess, SymGetModuleBase, NULL))
 	{
 		result.push_back(StackFrame());
 
-		DWORD moduleBase = SymGetModuleBase(hProcess, frame.AddrPC.Offset);
+#if _WIN64
+		DWORD64 moduleBase = 0;
+#else
+		DWORD moduleBase = 0;
+#endif
 
-		result.back().moduleName = L"Unknown";
+		moduleBase = SymGetModuleBase(hProcess, frame.AddrPC.Offset);
+
 		wchar_t moduleBuff[MAX_PATH];
 		if (moduleBase && GetModuleFileName((HINSTANCE)moduleBase, moduleBuff, MAX_PATH))
 		{
 			result.back().moduleName = moduleBuff;
 		}
+		else
+		{
+			result.back().moduleName = L"Unknown";
+		}
 
-		result.back().functionName = L"Unknown";
 		char symbolBuffer[sizeof(IMAGEHLP_SYMBOL) + 255];
 		PIMAGEHLP_SYMBOL symbol = (PIMAGEHLP_SYMBOL)symbolBuffer;
 		symbol->SizeOfStruct = (sizeof IMAGEHLP_SYMBOL) + 255;
@@ -160,6 +184,10 @@ std::vector<StackFrame> ThreadTree::getStackTrace(HANDLE hProcess, HANDLE hThrea
 			wchar_t wideBuf[255] = { 0 };
 			MultiByteToWideChar(1251, NULL, symbol->Name, strlen(symbol->Name), wideBuf, 255);
 			result.back().functionName = wideBuf;
+		}
+		else
+		{
+			result.back().functionName = L"Unknown";
 		}
 	}
 
