@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <DbgHelp.h>
 #include <TlHelp32.h>
+#include <psapi.h>
 
 struct StackFrame
 {

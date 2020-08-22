@@ -162,11 +162,10 @@ std::vector<StackFrame> ThreadTree::getStackTrace(HANDLE hProcess, HANDLE hThrea
 #else
 		DWORD moduleBase = 0;
 #endif
-
 		moduleBase = SymGetModuleBase(hProcess, frame.AddrPC.Offset);
 
 		wchar_t moduleBuff[MAX_PATH];
-		if (moduleBase && GetModuleFileName((HINSTANCE)moduleBase, moduleBuff, MAX_PATH))
+		if (moduleBase &&  GetModuleFileNameEx(hProcess, (HMODULE)moduleBase, moduleBuff, MAX_PATH))
 		{
 			result.back().moduleName = moduleBuff;
 		}
@@ -174,15 +173,17 @@ std::vector<StackFrame> ThreadTree::getStackTrace(HANDLE hProcess, HANDLE hThrea
 		{
 			result.back().moduleName = L"Unknown";
 		}
+		DWORD err = GetLastError();
 
-		char symbolBuffer[sizeof(IMAGEHLP_SYMBOL) + 255];
+		constexpr size_t symBufSize = 255;
+		char symbolBuffer[sizeof(IMAGEHLP_SYMBOL) + symBufSize];
 		PIMAGEHLP_SYMBOL symbol = (PIMAGEHLP_SYMBOL)symbolBuffer;
-		symbol->SizeOfStruct = (sizeof IMAGEHLP_SYMBOL) + 255;
-		symbol->MaxNameLength = 254;
+		symbol->SizeOfStruct = (sizeof IMAGEHLP_SYMBOL) + symBufSize;
+		symbol->MaxNameLength = symBufSize-1;
 		if (SymGetSymFromAddr(hProcess, frame.AddrPC.Offset, NULL, symbol))
 		{
-			wchar_t wideBuf[255] = { 0 };
-			MultiByteToWideChar(1251, NULL, symbol->Name, strlen(symbol->Name), wideBuf, 255);
+			wchar_t wideBuf[symBufSize] = { 0 };
+			MultiByteToWideChar(1251, NULL, symbol->Name, strlen(symbol->Name), wideBuf, symBufSize);
 			result.back().functionName = wideBuf;
 		}
 		else
