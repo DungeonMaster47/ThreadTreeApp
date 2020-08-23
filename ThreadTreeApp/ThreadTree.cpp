@@ -127,7 +127,17 @@ std::vector<StackFrame> ThreadTree::getStackTrace(HANDLE hProcess, HANDLE hThrea
 
 	CONTEXT context = {};
 	context.ContextFlags = CONTEXT_FULL;
-	GetThreadContext(hThread, &context);
+
+	if (GetThreadId(hThread) == GetCurrentThreadId())
+	{
+		RtlCaptureContext(&context);
+	}
+	else
+	{
+		SuspendThread(hThread);
+		GetThreadContext(hThread, &context);
+		ResumeThread(hThread);
+	}
 
 #if _WIN64
 	STACKFRAME frame = {};
